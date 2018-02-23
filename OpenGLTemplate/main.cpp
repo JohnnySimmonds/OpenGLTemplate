@@ -23,14 +23,15 @@ using namespace glm;
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-
+GLuint vertexShader, fragmentShader, vertexShaderID, fragmentShaderID;
+bool clearColor = false;
 /*Stores information of the vbo to be used for the vao*/
 struct VertexBuffers {
 	enum { VERTICES = 0, NORMALS, INDICES, COUNT };
 
 	GLuint id[COUNT];
 };
-
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
 string LoadSource(const string &filename);
@@ -71,6 +72,7 @@ bool initVAO(GLuint vao, const VertexBuffers& vbo)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo.id[VertexBuffers::INDICES]);
 
 	return !CheckGLErrors("initVAO");		//Check for errors in initialize
+	glBindVertexArray(0);
 }
 
 /*Loads the buffer with the vbo buffer with the required data*/
@@ -114,9 +116,11 @@ int main()
 	// glfw: initialize and configure
 	// ------------------------------
 	glfwInit();
-	//glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	//glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	
+//	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+//	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	
 	/*
 	#ifdef __APPLE__
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
@@ -133,7 +137,7 @@ int main()
 	}
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-
+	glfwSetKeyCallback(window, key_callback);
 	// glad: load all OpenGL function pointers
 	// ---------------------------------------
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
@@ -143,9 +147,9 @@ int main()
 	}
 
 	vector<vec3> vertices;
-	vertices.push_back(vec3(0.5f, 0.0f, 0.0f));
-	vertices.push_back(vec3(0.0f, 0.5f, 0.0f));
 	vertices.push_back(vec3(0.5f, 0.5f, 0.0f));
+	vertices.push_back(vec3(0.5f, -0.5f, 0.0f));
+	vertices.push_back(vec3(-0.5f, 0.5f, 0.0f));
 	vector<unsigned int> indices;
 	indices.push_back(0);
 	indices.push_back(1);
@@ -159,6 +163,7 @@ int main()
 	glGenVertexArrays(1, &vao);
 
 	VertexBuffers vbo;
+	glGenBuffers(VertexBuffers::COUNT, vbo.id);
 
 	initVAO(vao, vbo);
 
@@ -174,17 +179,22 @@ int main()
 		// input
 		// -----
 		processInput(window);
-
+		if (clearColor == true)
+		{
+		
+			glClearColor(0.2f, 0.5f, 0.3f, 1.0f);
+		}
+		glClear(GL_COLOR_BUFFER_BIT);
 		// render
 		// ------
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glBindVertexArray(vao);
+
 		glUseProgram(shaderProgram);
+		glBindVertexArray(vao);
+
 
 		loadBuffer(vbo, vertices, normal, indices);
 		glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
-
+		//glDrawArrays(GL_TRIANGLES, 0, 3);
 		CheckGLErrors("Render");
 		glUseProgram(0);
 		glBindVertexArray(0);
@@ -197,7 +207,9 @@ int main()
 	}
 
 	// glfw: terminate, clearing all previously allocated GLFW resources.
-	// ------------------------------------------------------------------
+	// ------------------------------------------------------------------	
+	glDeleteShader(vertexShaderID);
+	glDeleteShader(fragmentShaderID);
 	glfwTerminate();
 
 	return 0;
@@ -209,8 +221,19 @@ void processInput(GLFWwindow *window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+
 }
 
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+		clearColor = false;
+
+	if (key == GLFW_KEY_SPACE && action == GLFW_RELEASE)
+		clearColor = true;
+
+
+}
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -278,16 +301,15 @@ GLuint LinkProgram(GLuint vertexID, GLuint fragmentID)
 }
 GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc)
 {
-
-	GLuint vertexShader = GL_VERTEX_SHADER;
+	 vertexShader = GL_VERTEX_SHADER;
 	string vertexShaderSource = LoadSource(vertexShaderLoc);
 
-	GLuint vertexShaderID = CompileShader(vertexShader, vertexShaderSource);
+	vertexShaderID = CompileShader(vertexShader, vertexShaderSource);
 
-	GLuint fragmentShader = GL_FRAGMENT_SHADER;
+	 fragmentShader = GL_FRAGMENT_SHADER;
 	string fragmentShaderSource = LoadSource(fragmentShaderLoc);
 
-	GLuint fragmentShaderID = CompileShader(fragmentShader, fragmentShaderSource);
+	fragmentShaderID = CompileShader(fragmentShader, fragmentShaderSource);
 
 	GLuint shaderProgram = LinkProgram(vertexShaderID, fragmentShaderID);
 
