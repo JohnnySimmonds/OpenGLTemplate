@@ -27,8 +27,9 @@ struct VertexBuffers {
 	GLuint id[COUNT];
 };
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+void mouse_callback(GLFWwindow* window, double xPosition, double yPosition);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow *window, camera& currCamera);
 string LoadSource(const string &filename);
 GLuint CompileShader(GLenum shaderType, const string &source);
 GLuint LinkProgram(GLuint vertexID, GLuint fragmentID);
@@ -36,10 +37,16 @@ GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc);
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
 bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
 bool CheckGLErrors(string location);
-void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, camera mainCamera);
+bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices);
 void initGL();
 bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view);
+void printVec3(vec3 vecToPrint, string vecName);
+void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal);
 GLFWwindow* createWindow();
+camera mainCamera;
+bool isFirstMousePosition = true;
+bool mouseButtonOnePressed = false;
+float lastX, lastY, yaw, pitch;
 
 /*Loads the contents of the GLSL shader files*/
 string LoadSource(const string &filename)
@@ -198,6 +205,8 @@ GLFWwindow* createWindow()
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetKeyCallback(window, key_callback);
+	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	return window;
 }
 void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
@@ -213,6 +222,89 @@ void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vecto
 	normal.push_back(vec3(1.0f, 0.0f, 0.0f));
 	normal.push_back(vec3(0.0f, 1.0f, 0.0f));
 	normal.push_back(vec3(0.0f, 0.0f, 1.0f));
+}
+void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
+{
+	/* points for generating the cube*/
+	vertices.push_back(vec3(1.0f, 1.0f, 1.f)); //0
+	vertices.push_back(vec3(1.0f, -1.0f, 1.f)); //1
+	vertices.push_back(vec3(-1.0f, -1.0f, 1.f)); //2
+	vertices.push_back(vec3(-1.0f, 1.0f, 1.f)); //3
+	vertices.push_back(vec3(-1.0f, -1.0f, -1.f)); //4
+	vertices.push_back(vec3(-1.0f, 1.0f, -1.f)); //5
+	vertices.push_back(vec3(1.0f, 1.0f, -1.f)); //6
+	vertices.push_back(vec3(1.0f, -1.0f, -1.f)); //7
+
+
+
+												  /* front of cube*/
+	indices.push_back(0);
+	indices.push_back(1);
+	indices.push_back(2);
+
+	indices.push_back(0);
+	indices.push_back(2);
+	indices.push_back(3);
+
+	/* left side of cube*/
+	indices.push_back(2);
+	indices.push_back(3);
+	indices.push_back(4);
+
+	indices.push_back(3);
+	indices.push_back(4);
+	indices.push_back(5);
+
+	/* back of cube*/
+	indices.push_back(6);
+	indices.push_back(7);
+	indices.push_back(4);
+
+	indices.push_back(4);
+	indices.push_back(5);
+	indices.push_back(6);
+
+	/* right side of cube*/
+	indices.push_back(0);
+	indices.push_back(1);
+	indices.push_back(7);
+
+	indices.push_back(0);
+	indices.push_back(7);
+	indices.push_back(6);
+
+	/* top of cube*/
+	indices.push_back(0);
+	indices.push_back(3);
+	indices.push_back(5);
+
+	indices.push_back(0);
+	indices.push_back(5);
+	indices.push_back(6);
+
+	/* bottom of cube*/
+	indices.push_back(1);
+	indices.push_back(2);
+	indices.push_back(4);
+
+	indices.push_back(1);
+	indices.push_back(4);
+	indices.push_back(7);
+
+
+
+	/*colors of each point*/
+
+	normal.push_back(vec3(0.9f, 0.0f, 0.f));
+	normal.push_back(vec3(0.7f, 0.0f, 0.f));
+	normal.push_back(vec3(0.5f, 0.0f, 0.f));
+	normal.push_back(vec3(0.3f, 0.0f, 0.f));
+
+	normal.push_back(vec3(0.9f, 0.0f, 0.f));
+	normal.push_back(vec3(0.7f, 0.0f, 0.f));
+	normal.push_back(vec3(0.5f, 0.0f, 0.f));
+	normal.push_back(vec3(0.3f, 0.0f, 0.f));
+
 }
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
 {
@@ -255,7 +347,6 @@ int main()
 	GLuint vao;
 	VertexBuffers vbo;
 	GLuint shaderProgram;
-	camera mainCamera;
 
 	glfwInit();
 
@@ -272,25 +363,28 @@ int main()
 		return -1;
 	}
 
-	createTriangle(vertices, indices, normal);
+	//createTriangle(vertices, indices, normal);
+	createCube(vertices, indices, normal);
 
 	initVaoVbo(vao, vbo);
 
 	shaderProgram = initShader("Shaders/vertex.glsl", "Shaders/frag.glsl");
-
+	glEnable(GL_DEPTH_TEST);
 	while (!glfwWindowShouldClose(window))
 	{
-		processInput(window, mainCamera);
+
 		if (clearColor == true)
 		{
 			glClearColor(0.2f, 0.5f, 0.3f, 1.0f);
 		}
-		glClear(GL_COLOR_BUFFER_BIT);
+		
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		render(shaderProgram, vao, vbo, vertices, normal, indices, mainCamera);
+		render(shaderProgram, vao, vbo, vertices, normal, indices);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+		//glfwWaitEvents();
 	}
 
 	// glfw: terminate, clearing all previously allocated GLFW resources.
@@ -303,32 +397,76 @@ int main()
 	return 0;
 }
 
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window, camera& currCamera)
-{
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		currCamera.moveCameraPositionForward();
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		currCamera.moveCameraPositionBackwards();
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		currCamera.moveCameraPositionLeft();
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		currCamera.moveCameraPositionRight();
-
-}
-
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, true);
+	if (key == GLFW_KEY_W && (action == GLFW_REPEAT || action == GLFW_PRESS))
+		mainCamera.moveCameraPositionForward();
+	if (key == GLFW_KEY_S && (action == GLFW_REPEAT || action == GLFW_PRESS))
+		mainCamera.moveCameraPositionBackwards();
+	if (key == GLFW_KEY_A && (action == GLFW_REPEAT || action == GLFW_PRESS))
+		mainCamera.moveCameraPositionRight();
+	if (key == GLFW_KEY_D &&  (action == GLFW_REPEAT || action == GLFW_PRESS))
+		mainCamera.moveCameraPositionLeft();
 	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 		clearColor = false;
-
 	if (key == GLFW_KEY_SPACE && action == GLFW_RELEASE)
 		clearColor = true;
 
+	mainCamera.updateCameraView();
+	
+}
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
 
+	if (button == GLFW_MOUSE_BUTTON_LEFT && (action == GLFW_PRESS || action == GLFW_REPEAT))
+	{
+		mouseButtonOnePressed = true;
+	}
+	else
+		mouseButtonOnePressed = false;
+}
+void mouse_callback(GLFWwindow* window, double xPosition, double yPosition)
+{
+	if (isFirstMousePosition)
+	{
+		lastX = xPosition;
+		lastY = yPosition;
+		isFirstMousePosition = false;
+	}
+	if (mouseButtonOnePressed)
+	{
+		float xOffset = xPosition - lastX;
+		float yOffset = lastY - yPosition;
+		lastX = xPosition;
+		lastY = yPosition;
+
+		float sensitivity = 0.05f;
+		xOffset *= sensitivity;
+		yOffset *= sensitivity;
+
+		yaw += xOffset;
+		pitch += yOffset;
+
+		if (pitch > 89.0f)
+			pitch = 89.0f;
+		if (pitch < -89.0f)
+			pitch = -89.0f;
+
+		vec3 target;
+		target.x = cos(radians(pitch)) * cos(radians(yaw));
+		target.y = sin(radians(pitch));
+		target.z = cos(radians(pitch)) * sin(radians(yaw));
+
+		mainCamera.updateCameraTarget(normalize(target));
+		mainCamera.updateCameraView();
+		printVec3(target, "Target");
+	}
+}
+void printVec3 (vec3 vecToPrint, string vecName)
+{
+	cout << vecName << ": " << "X: " << vecToPrint.x << "Y: " << vecToPrint.y << "Z: " << vecToPrint.z << endl;
 }
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
@@ -338,21 +476,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	// height will be significantly larger than specified on retina displays.
 	glViewport(0, 0, width, height);
 }
-/*
-glUseProgram(program);
 
-glUniformMatrix4fv(glGetUniformLocation(program, "modelviewMatrix"),
-1,
-false,
-&modelview[0][0]);
-
-glUniformMatrix4fv(glGetUniformLocation(program, "perspectiveMatrix"),
-1,
-false,
-&perspective[0][0]);
-
-glUseProgram(0);
-*/
 bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 {
 	glUseProgram(shaderProgram);
@@ -362,15 +486,18 @@ bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 	glUseProgram(0);
 	return !CheckGLErrors("loadUniforms");
 }
-void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, camera mainCamera)
+
+bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices)
 {
-	setViewMatrixForShaders(shaderProgram, mainCamera.getCameraView());
+	mat4 perspectiveMatrix = perspective(radians(80.f), 1.f, 0.1f, 300.f);
+	setViewMatrixForShaders(shaderProgram, perspectiveMatrix*mainCamera.getCameraView());
 	glUseProgram(shaderProgram);
 	glBindVertexArray(vao);
 	loadBuffer(vbo, vertices, normal, indices);
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
-	//glDrawArrays(GL_TRIANGLES, 0, 3);
-	CheckGLErrors("Render");
+
+
 	glUseProgram(0);
 	glBindVertexArray(0);
+	return !CheckGLErrors("Render");
 }

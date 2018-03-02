@@ -11,6 +11,8 @@ public:
 	void camera::moveCameraPositionBackwards();
 	void camera::moveCameraPositionLeft();
 	void camera::moveCameraPositionRight();
+	void camera::updateCameraTarget(vec3 target);
+	void camera::updateCameraView();
 	mat4 getCameraView();
 private:
 	vec3 cameraPosition, cameraTarget, cameraUp;
