@@ -1,22 +1,16 @@
 
 #include <glad/glad.h>
-
 #include <GLFW/glfw3.h>
-
 #include <stdio.h>
 #include <stdlib.h>
-
-
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
-
 #include <string>
 #include <iostream>
 #include <fstream>
-
 #include <vector>
+#include "camera.h"
+
 
 using namespace std;
 using namespace glm;
@@ -34,7 +28,7 @@ struct VertexBuffers {
 };
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow *window);
+void processInput(GLFWwindow *window, camera& currCamera);
 string LoadSource(const string &filename);
 GLuint CompileShader(GLenum shaderType, const string &source);
 GLuint LinkProgram(GLuint vertexID, GLuint fragmentID);
@@ -42,11 +36,119 @@ GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc);
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
 bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
 bool CheckGLErrors(string location);
-void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices);
+void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, camera mainCamera);
 void initGL();
+bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view);
 GLFWwindow* createWindow();
-/*Initializes the Vertex Array Object based on the vbo information*/
 
+/*Loads the contents of the GLSL shader files*/
+string LoadSource(const string &filename)
+{
+	string source;
+
+	ifstream input(filename.c_str());
+	if (input) {
+		copy(istreambuf_iterator<char>(input),
+			istreambuf_iterator<char>(),
+			back_inserter(source));
+		input.close();
+	}
+	else {
+		cout << "ERROR: Could not load shader source from file "
+			<< filename << endl;
+	}
+
+	return source;
+}
+
+// creates and returns a shader object compiled from the given source
+GLuint CompileShader(GLenum shaderType, const string &source)
+{
+	// allocate shader object name
+	GLuint shaderObject = glCreateShader(shaderType);
+
+	// try compiling the source as a shader of the given type
+	const GLchar *source_ptr = source.c_str();
+	glShaderSource(shaderObject, 1, &source_ptr, 0);
+	glCompileShader(shaderObject);
+
+	// retrieve compile status
+	GLint status;
+	glGetShaderiv(shaderObject, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE)
+	{
+		GLint length;
+		glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, &length);
+		string info(length, ' ');
+		glGetShaderInfoLog(shaderObject, info.length(), &length, &info[0]);
+		cout << "ERROR compiling shader:" << endl << endl;
+		cout << source << endl;
+		cout << info << endl;
+	}
+
+	return shaderObject;
+}
+GLuint LinkProgram(GLuint vertexID, GLuint fragmentID)
+{
+	GLuint shaderProgram = glCreateProgram();
+
+	glAttachShader(shaderProgram, vertexID);
+	glAttachShader(shaderProgram, fragmentID);
+	glLinkProgram(shaderProgram);
+
+	return shaderProgram;
+}
+GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc)
+{
+	vertexShader = GL_VERTEX_SHADER;
+	string vertexShaderSource = LoadSource(vertexShaderLoc);
+
+	vertexShaderID = CompileShader(vertexShader, vertexShaderSource);
+
+	fragmentShader = GL_FRAGMENT_SHADER;
+	string fragmentShaderSource = LoadSource(fragmentShaderLoc);
+
+	fragmentShaderID = CompileShader(fragmentShader, fragmentShaderSource);
+
+	GLuint shaderProgram = LinkProgram(vertexShaderID, fragmentShaderID);
+
+	return shaderProgram;
+}
+
+void initGL()
+{
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	glClearColor(0.f, 0.f, 0.f, 0.f);		//Color to clear the screen with (R, G, B, Alpha)
+}
+/*Checks for any opengl errors*/
+bool CheckGLErrors(string location)
+{
+	bool error = false;
+	for (GLenum flag = glGetError(); flag != GL_NO_ERROR; flag = glGetError())
+	{
+		cout << "OpenGL ERROR:  ";
+		switch (flag) {
+		case GL_INVALID_ENUM:
+			cout << location << ": " << "GL_INVALID_ENUM" << endl; break;
+		case GL_INVALID_VALUE:
+			cout << location << ": " << "GL_INVALID_VALUE" << endl; break;
+		case GL_INVALID_OPERATION:
+			cout << location << ": " << "GL_INVALID_OPERATION" << endl; break;
+		case GL_INVALID_FRAMEBUFFER_OPERATION:
+			cout << location << ": " << "GL_INVALID_FRAMEBUFFER_OPERATION" << endl; break;
+		case GL_OUT_OF_MEMORY:
+			cout << location << ": " << "GL_OUT_OF_MEMORY" << endl; break;
+		default:
+			cout << "[unknown error code]" << endl;
+		}
+		error = true;
+	}
+	return error;
+}
 
 /*Loads the buffer with the vbo buffer with the required data*/
 bool loadBuffer(const VertexBuffers& vbo,
@@ -153,6 +255,7 @@ int main()
 	GLuint vao;
 	VertexBuffers vbo;
 	GLuint shaderProgram;
+	camera mainCamera;
 
 	glfwInit();
 
@@ -177,14 +280,14 @@ int main()
 
 	while (!glfwWindowShouldClose(window))
 	{
-		processInput(window);
+		processInput(window, mainCamera);
 		if (clearColor == true)
 		{
 			glClearColor(0.2f, 0.5f, 0.3f, 1.0f);
 		}
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		render(shaderProgram, vao, vbo, vertices, normal, indices);
+		render(shaderProgram, vao, vbo, vertices, normal, indices, mainCamera);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -202,10 +305,18 @@ int main()
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
+void processInput(GLFWwindow *window, camera& currCamera)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		currCamera.moveCameraPositionForward();
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		currCamera.moveCameraPositionBackwards();
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		currCamera.moveCameraPositionLeft();
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		currCamera.moveCameraPositionRight();
 
 }
 
@@ -227,120 +338,35 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	// height will be significantly larger than specified on retina displays.
 	glViewport(0, 0, width, height);
 }
-/*Loads the contents of the GLSL shader files*/
-string LoadSource(const string &filename)
-{
-	string source;
+/*
+glUseProgram(program);
 
-	ifstream input(filename.c_str());
-	if (input) {
-		copy(istreambuf_iterator<char>(input),
-			istreambuf_iterator<char>(),
-			back_inserter(source));
-		input.close();
-	}
-	else {
-		cout << "ERROR: Could not load shader source from file "
-			<< filename << endl;
-	}
+glUniformMatrix4fv(glGetUniformLocation(program, "modelviewMatrix"),
+1,
+false,
+&modelview[0][0]);
 
-	return source;
-}
+glUniformMatrix4fv(glGetUniformLocation(program, "perspectiveMatrix"),
+1,
+false,
+&perspective[0][0]);
 
-// creates and returns a shader object compiled from the given source
-GLuint CompileShader(GLenum shaderType, const string &source)
-{
-	// allocate shader object name
-	GLuint shaderObject = glCreateShader(shaderType);
-
-	// try compiling the source as a shader of the given type
-	const GLchar *source_ptr = source.c_str();
-	glShaderSource(shaderObject, 1, &source_ptr, 0);
-	glCompileShader(shaderObject);
-
-	// retrieve compile status
-	GLint status;
-	glGetShaderiv(shaderObject, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE)
-	{
-		GLint length;
-		glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, &length);
-		string info(length, ' ');
-		glGetShaderInfoLog(shaderObject, info.length(), &length, &info[0]);
-		cout << "ERROR compiling shader:" << endl << endl;
-		cout << source << endl;
-		cout << info << endl;
-	}
-
-	return shaderObject;
-}
-GLuint LinkProgram(GLuint vertexID, GLuint fragmentID)
-{
-	GLuint shaderProgram = glCreateProgram();
-
-	glAttachShader(shaderProgram, vertexID);
-	glAttachShader(shaderProgram, fragmentID);
-	glLinkProgram(shaderProgram);
-
-	return shaderProgram;
-}
-GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc)
-{
-	 vertexShader = GL_VERTEX_SHADER;
-	string vertexShaderSource = LoadSource(vertexShaderLoc);
-
-	vertexShaderID = CompileShader(vertexShader, vertexShaderSource);
-
-	 fragmentShader = GL_FRAGMENT_SHADER;
-	string fragmentShaderSource = LoadSource(fragmentShaderLoc);
-
-	fragmentShaderID = CompileShader(fragmentShader, fragmentShaderSource);
-
-	GLuint shaderProgram = LinkProgram(vertexShaderID, fragmentShaderID);
-
-	return shaderProgram;
-}
-
-void initGL()
-{
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
-
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	glClearColor(0.f, 0.f, 0.f, 0.f);		//Color to clear the screen with (R, G, B, Alpha)
-}
-/*Checks for any opengl errors*/
-bool CheckGLErrors(string location)
-{
-	bool error = false;
-	for (GLenum flag = glGetError(); flag != GL_NO_ERROR; flag = glGetError())
-	{
-		cout << "OpenGL ERROR:  ";
-		switch (flag) {
-		case GL_INVALID_ENUM:
-			cout << location << ": " << "GL_INVALID_ENUM" << endl; break;
-		case GL_INVALID_VALUE:
-			cout << location << ": " << "GL_INVALID_VALUE" << endl; break;
-		case GL_INVALID_OPERATION:
-			cout << location << ": " << "GL_INVALID_OPERATION" << endl; break;
-		case GL_INVALID_FRAMEBUFFER_OPERATION:
-			cout << location << ": " << "GL_INVALID_FRAMEBUFFER_OPERATION" << endl; break;
-		case GL_OUT_OF_MEMORY:
-			cout << location << ": " << "GL_OUT_OF_MEMORY" << endl; break;
-		default:
-			cout << "[unknown error code]" << endl;
-		}
-		error = true;
-	}
-	return error;
-}
-void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices)
+glUseProgram(0);
+*/
+bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 {
 	glUseProgram(shaderProgram);
+	GLuint cameraLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
+	glUniformMatrix4fv(cameraLocation, 1, false, &view[0][0]);
+
+	glUseProgram(0);
+	return !CheckGLErrors("loadUniforms");
+}
+void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, camera mainCamera)
+{
+	setViewMatrixForShaders(shaderProgram, mainCamera.getCameraView());
+	glUseProgram(shaderProgram);
 	glBindVertexArray(vao);
-
-
 	loadBuffer(vbo, vertices, normal, indices);
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
 	//glDrawArrays(GL_TRIANGLES, 0, 3);
