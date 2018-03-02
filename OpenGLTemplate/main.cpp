@@ -25,6 +25,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 GLuint vertexShader, fragmentShader, vertexShaderID, fragmentShaderID;
 bool clearColor = false;
+int EXIT = -1;
 /*Stores information of the vbo to be used for the vao*/
 struct VertexBuffers {
 	enum { VERTICES = 0, NORMALS, INDICES, COUNT };
@@ -38,42 +39,14 @@ string LoadSource(const string &filename);
 GLuint CompileShader(GLenum shaderType, const string &source);
 GLuint LinkProgram(GLuint vertexID, GLuint fragmentID);
 GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc);
-bool initVAO(GLuint vao, const VertexBuffers& vbo);
+bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
 bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
 bool CheckGLErrors(string location);
+void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices);
 void initGL();
+GLFWwindow* createWindow();
 /*Initializes the Vertex Array Object based on the vbo information*/
-bool initVAO(GLuint vao, const VertexBuffers& vbo)
-{
-	glBindVertexArray(vao);		//Set the active Vertex Array
 
-	glEnableVertexAttribArray(0);		//Tell opengl you're using layout attribute 0 (For shader input)
-	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::VERTICES]);		//Set the active Vertex Buffer
-	glVertexAttribPointer(
-		0,				//Attribute
-		3,				//Size # Components
-		GL_FLOAT,	//Type
-		GL_FALSE, 	//Normalized?
-		sizeof(vec3),	//Stride
-		(void*)0			//Offset
-	);
-
-	glEnableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::NORMALS]);
-	glVertexAttribPointer(
-		1,				//Attribute
-		3,				//Size # Components
-		GL_FLOAT,	//Type
-		GL_FALSE, 	//Normalized?
-		sizeof(vec3),	//Stride
-		(void*)0			//Offset
-	);
-	glEnableVertexAttribArray(2);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo.id[VertexBuffers::INDICES]);
-
-	return !CheckGLErrors("initVAO");		//Check for errors in initialize
-	glBindVertexArray(0);
-}
 
 /*Loads the buffer with the vbo buffer with the required data*/
 bool loadBuffer(const VertexBuffers& vbo,
@@ -110,98 +83,109 @@ bool loadBuffer(const VertexBuffers& vbo,
 
 	return !CheckGLErrors("loadBuffer");
 }
-
-int main()
+GLFWwindow* createWindow()
 {
-	// glfw: initialize and configure
-	// ------------------------------
-	glfwInit();
-	
-//	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-//	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	
-	/*
-	#ifdef __APPLE__
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
-	#endif
-	*/
-	// glfw window creation
-	// --------------------
 	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "OpenGL", NULL, NULL);
+
 	if (window == NULL)
 	{
 		std::cout << "Failed to create GLFW window" << std::endl;
 		glfwTerminate();
-		return -1;
+		return NULL;
 	}
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetKeyCallback(window, key_callback);
+	return window;
+}
+void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
+{
+	vertices.push_back(vec3(0.5f, 0.5f, 0.0f));
+	vertices.push_back(vec3(0.5f, -0.5f, 0.0f));
+	vertices.push_back(vec3(-0.5f, 0.5f, 0.0f));
+
+	indices.push_back(0);
+	indices.push_back(1);
+	indices.push_back(2);
+
+	normal.push_back(vec3(1.0f, 0.0f, 0.0f));
+	normal.push_back(vec3(0.0f, 1.0f, 0.0f));
+	normal.push_back(vec3(0.0f, 0.0f, 1.0f));
+}
+bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
+{
+	glGenVertexArrays(1, &vao);
+
+	glGenBuffers(VertexBuffers::COUNT, vbo.id);
+
+	glBindVertexArray(vao);		//Set the active Vertex Array
+
+	glEnableVertexAttribArray(0);		//Tell opengl you're using layout attribute 0 (For shader input)
+	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::VERTICES]);		//Set the active Vertex Buffer
+	glVertexAttribPointer(
+		0,				//Attribute
+		3,				//Size # Components
+		GL_FLOAT,	//Type
+		GL_FALSE, 	//Normalized?
+		sizeof(vec3),	//Stride
+		(void*)0			//Offset
+	);
+
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::NORMALS]);
+	glVertexAttribPointer(
+		1,				//Attribute
+		3,				//Size # Components
+		GL_FLOAT,	//Type
+		GL_FALSE, 	//Normalized?
+		sizeof(vec3),	//Stride
+		(void*)0			//Offset
+	);
+	glEnableVertexAttribArray(2);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo.id[VertexBuffers::INDICES]);
+	glBindVertexArray(0);
+	return !CheckGLErrors("initVAO");		//Check for errors in initialize
+}
+int main()
+{
+	vector<vec3> vertices, normal;
+	vector<unsigned int> indices;
+	GLuint vao;
+	VertexBuffers vbo;
+	GLuint shaderProgram;
+
+	glfwInit();
+
+	GLFWwindow* window = createWindow();
+	
+	if (window == NULL)
+		return EXIT;
+	
+
 	// glad: load all OpenGL function pointers
-	// ---------------------------------------
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return -1;
 	}
 
-	vector<vec3> vertices;
-	vertices.push_back(vec3(0.5f, 0.5f, 0.0f));
-	vertices.push_back(vec3(0.5f, -0.5f, 0.0f));
-	vertices.push_back(vec3(-0.5f, 0.5f, 0.0f));
-	vector<unsigned int> indices;
-	indices.push_back(0);
-	indices.push_back(1);
-	indices.push_back(2);
-	vector<vec3> normal;
-	normal.push_back(vec3(1.0f, 0.0f, 0.0f));
-	normal.push_back(vec3(0.0f, 1.0f, 0.0f));
-	normal.push_back(vec3(0.0f, 0.0f, 1.0f));
+	createTriangle(vertices, indices, normal);
 
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
+	initVaoVbo(vao, vbo);
 
-	VertexBuffers vbo;
-	glGenBuffers(VertexBuffers::COUNT, vbo.id);
+	shaderProgram = initShader("Shaders/vertex.glsl", "Shaders/frag.glsl");
 
-	initVAO(vao, vbo);
-
-	/*Shader business TODO*/
-
-	GLuint shaderProgram = initShader("Shaders/vertex.glsl", "Shaders/frag.glsl");
-
-
-	// render loop
-	// -----------
 	while (!glfwWindowShouldClose(window))
 	{
-		// input
-		// -----
 		processInput(window);
 		if (clearColor == true)
 		{
-		
 			glClearColor(0.2f, 0.5f, 0.3f, 1.0f);
 		}
 		glClear(GL_COLOR_BUFFER_BIT);
-		// render
-		// ------
 
-		glUseProgram(shaderProgram);
-		glBindVertexArray(vao);
+		render(shaderProgram, vao, vbo, vertices, normal, indices);
 
-
-		loadBuffer(vbo, vertices, normal, indices);
-		glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
-		//glDrawArrays(GL_TRIANGLES, 0, 3);
-		CheckGLErrors("Render");
-		glUseProgram(0);
-		glBindVertexArray(0);
-		//glDrawArrays(GL_TRIANGLES, 0, 3);
-		//render();
-		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-		// -------------------------------------------------------------------------------
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
@@ -210,6 +194,7 @@ int main()
 	// ------------------------------------------------------------------	
 	glDeleteShader(vertexShaderID);
 	glDeleteShader(fragmentShaderID);
+	glDeleteShader(shaderProgram);
 	glfwTerminate();
 
 	return 0;
@@ -350,7 +335,16 @@ bool CheckGLErrors(string location)
 	}
 	return error;
 }
-void render()
+void render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices)
 {
+	glUseProgram(shaderProgram);
+	glBindVertexArray(vao);
 
+
+	loadBuffer(vbo, vertices, normal, indices);
+	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
+	//glDrawArrays(GL_TRIANGLES, 0, 3);
+	CheckGLErrors("Render");
+	glUseProgram(0);
+	glBindVertexArray(0);
 }
