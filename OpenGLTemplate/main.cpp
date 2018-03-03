@@ -37,16 +37,21 @@ GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc);
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
 bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
 bool CheckGLErrors(string location);
-bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices);
+bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix);
 void initGL();
+void loadUniforms(GLuint shaderProgram, mat4 projectionMatrix, mat4 modelMatrix);
 bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view);
+bool setModelMatrixForShaders(GLuint shaderProgram, mat4 modelMatrix);
+bool setProjectionMatrixForShaders(GLuint shaderProgram, mat4 projectionMatrix);
 void printVec3(vec3 vecToPrint, string vecName);
 void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal);
+
 GLFWwindow* createWindow();
 camera mainCamera;
 bool isFirstMousePosition = true;
 bool mouseButtonOnePressed = false;
 float lastX, lastY, yaw, pitch;
+int globalWidth =400, globalHeight=300;
 
 /*Loads the contents of the GLSL shader files*/
 string LoadSource(const string &filename)
@@ -347,7 +352,8 @@ int main()
 	GLuint vao;
 	VertexBuffers vbo;
 	GLuint shaderProgram;
-
+	mat4 perspectiveMatrix = perspective(radians(80.f), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
+	mat4 modelMatrix = mat4(1.0f);
 	glfwInit();
 
 	GLFWwindow* window = createWindow();
@@ -372,7 +378,7 @@ int main()
 	glEnable(GL_DEPTH_TEST);
 	while (!glfwWindowShouldClose(window))
 	{
-
+		perspectiveMatrix = perspective(radians(80.f), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
 		if (clearColor == true)
 		{
 			glClearColor(0.2f, 0.5f, 0.3f, 1.0f);
@@ -380,11 +386,13 @@ int main()
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		render(shaderProgram, vao, vbo, vertices, normal, indices);
+		mainCamera.updateCameraView();
+		loadUniforms(shaderProgram, perspectiveMatrix, modelMatrix);
+		render(shaderProgram, vao, vbo, vertices, normal, indices, perspectiveMatrix);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
-		//glfwWaitEvents();
+	
 	}
 
 	// glfw: terminate, clearing all previously allocated GLFW resources.
@@ -406,15 +414,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	if (key == GLFW_KEY_S && (action == GLFW_REPEAT || action == GLFW_PRESS))
 		mainCamera.moveCameraPositionBackwards();
 	if (key == GLFW_KEY_A && (action == GLFW_REPEAT || action == GLFW_PRESS))
-		mainCamera.moveCameraPositionRight();
-	if (key == GLFW_KEY_D &&  (action == GLFW_REPEAT || action == GLFW_PRESS))
 		mainCamera.moveCameraPositionLeft();
+	if (key == GLFW_KEY_D &&  (action == GLFW_REPEAT || action == GLFW_PRESS))
+		mainCamera.moveCameraPositionRight();
 	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
 		clearColor = false;
 	if (key == GLFW_KEY_SPACE && action == GLFW_RELEASE)
 		clearColor = true;
 
-	mainCamera.updateCameraView();
 	
 }
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -442,7 +449,7 @@ void mouse_callback(GLFWwindow* window, double xPosition, double yPosition)
 		lastX = xPosition;
 		lastY = yPosition;
 
-		float sensitivity = 0.05f;
+		float sensitivity = 0.5f;
 		xOffset *= sensitivity;
 		yOffset *= sensitivity;
 
@@ -454,14 +461,13 @@ void mouse_callback(GLFWwindow* window, double xPosition, double yPosition)
 		if (pitch < -89.0f)
 			pitch = -89.0f;
 
-		vec3 target;
-		target.x = cos(radians(pitch)) * cos(radians(yaw));
+		vec3 target = vec3(0.0f, 0.0f, -3.0f);
+		target.x = cos(radians(yaw)) * cos(radians(pitch));
 		target.y = sin(radians(pitch));
-		target.z = cos(radians(pitch)) * sin(radians(yaw));
+		target.z = sin(radians(yaw)) * cos(radians(pitch));
 
 		mainCamera.updateCameraTarget(normalize(target));
-		mainCamera.updateCameraView();
-		printVec3(target, "Target");
+
 	}
 }
 void printVec3 (vec3 vecToPrint, string vecName)
@@ -475,8 +481,35 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	// make sure the viewport matches the new window dimensions; note that width and 
 	// height will be significantly larger than specified on retina displays.
 	glViewport(0, 0, width, height);
+	globalWidth = width;
+	globalHeight = height;
 }
+void loadUniforms(GLuint shaderProgram, mat4 projectionMatrix, mat4 modelMatrix)
+{
+	setViewMatrixForShaders(shaderProgram, mainCamera.getCameraView());
+	setModelMatrixForShaders(shaderProgram, modelMatrix);
+	setProjectionMatrixForShaders(shaderProgram, projectionMatrix);
+}
+bool setProjectionMatrixForShaders(GLuint shaderProgram, mat4 projectionMatrix)
+{
+	glUseProgram(shaderProgram);
+	GLuint modelLocationForShader = glGetUniformLocation(shaderProgram, "projectionMatrix");
+	glUniformMatrix4fv(modelLocationForShader, 1, false, &projectionMatrix[0][0]);
 
+	glUseProgram(0);
+	return !CheckGLErrors("setProjectionMatrixForShaders");
+
+}
+bool setModelMatrixForShaders(GLuint shaderProgram, mat4 modelMatrix)
+{
+	glUseProgram(shaderProgram);
+	GLuint modelLocationForShader = glGetUniformLocation(shaderProgram, "modelMatrix");
+	glUniformMatrix4fv(modelLocationForShader, 1, false, &modelMatrix[0][0]);
+
+	glUseProgram(0);
+	return !CheckGLErrors("setModelMatrixForShaders");
+
+}
 bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 {
 	glUseProgram(shaderProgram);
@@ -484,13 +517,13 @@ bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 	glUniformMatrix4fv(cameraLocation, 1, false, &view[0][0]);
 
 	glUseProgram(0);
-	return !CheckGLErrors("loadUniforms");
+	return !CheckGLErrors("setViewMatrixForShaders");
 }
 
-bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices)
+bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix)
 {
-	mat4 perspectiveMatrix = perspective(radians(80.f), 1.f, 0.1f, 300.f);
-	setViewMatrixForShaders(shaderProgram, perspectiveMatrix*mainCamera.getCameraView());
+
+	
 	glUseProgram(shaderProgram);
 	glBindVertexArray(vao);
 	loadBuffer(vbo, vertices, normal, indices);

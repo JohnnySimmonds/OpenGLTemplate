@@ -37,6 +37,7 @@ mat4 camera::getCameraView()
 void camera::updateCameraTarget(vec3 target)
 {
 	cameraTarget = target;
+	
 }
 void camera::updateCameraView()
 {
