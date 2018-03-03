@@ -39,6 +39,7 @@ struct VertexBuffers {
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void mouse_callback(GLFWwindow* window, double xPosition, double yPosition);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 string LoadSource(const string &filename);
 GLuint CompileShader(GLenum shaderType, const string &source);
@@ -60,7 +61,7 @@ GLFWwindow* createWindow();
 camera mainCamera;
 bool isFirstMousePosition = true;
 bool mouseButtonOnePressed = false;
-float lastX, lastY, yaw, pitch;
+float lastX, lastY, yaw, pitch, fov = 90.0f;
 int globalWidth = 400, globalHeight = 300;
 
 int main()
@@ -70,7 +71,7 @@ int main()
 	GLuint vao;
 	VertexBuffers vbo;
 	GLuint shaderProgram;
-	mat4 perspectiveMatrix = perspective(radians(80.f), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
+	mat4 perspectiveMatrix;// = perspective(radians(80.f), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
 	mat4 modelMatrix = mat4(1.0f);
 	glfwInit();
 
@@ -96,12 +97,10 @@ int main()
 
 	while (!glfwWindowShouldClose(window))
 	{
-		perspectiveMatrix = perspective(radians(80.f), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
+		perspectiveMatrix = perspective(radians(fov), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
 		
 		clearColorCheck();
-		
-	
-		
+
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		mainCamera.updateCameraView();
@@ -137,6 +136,7 @@ GLFWwindow* createWindow()
 	glfwSetKeyCallback(window, key_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
+	glfwSetScrollCallback(window, scroll_callback);
 	return window;
 }
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -205,6 +205,15 @@ void mouse_callback(GLFWwindow* window, double xPosition, double yPosition)
 	}
 }
 
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	if (fov >= 1.0f && fov <= 90.0f)
+		fov -= yoffset;
+	if (fov <= 1.0f)
+		fov = 1.0f;
+	if (fov >= 90.0f)
+		fov = 90.0f;
+}
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
