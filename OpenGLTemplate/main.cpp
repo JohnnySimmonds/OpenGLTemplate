@@ -21,16 +21,21 @@ Johnny Simmonds
 #include <vector>
 #include "camera.h"
 #include "inputCallBackForSpecificWindow.h"
+#include "shader.h"
 
 
 using namespace std;
 using namespace glm;
-// settings
+
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
+
 GLuint vertexShader, fragmentShader, vertexShaderID, fragmentShaderID;
+
 int EXIT = -1;
+
 camera mainCamera;
+
 inputCallBackForSpecificWindow inputForWindow;
 
 
@@ -40,10 +45,6 @@ struct VertexBuffers {
 	GLuint id[COUNT];
 };
 
-string LoadSource(const string &filename);
-GLuint CompileShader(GLenum shaderType, const string &source);
-GLuint LinkProgram(GLuint vertexID, GLuint fragmentID);
-GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc);
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
 bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
 bool CheckGLErrors(string location);
@@ -60,6 +61,7 @@ void setupInputForWindow(GLFWwindow* window);
 int getWidthFromViewport();
 int getHeightFromViewport();
 GLint* getWindowDimensions();
+mat4 updatePerspectiveMatrix();
 
 
 int main()
@@ -68,18 +70,15 @@ int main()
 	vector<unsigned int> indices;
 	GLuint vao;
 	VertexBuffers vbo;
-	GLuint shaderProgram;
 	mat4 perspectiveMatrix;
 	mat4 modelMatrix = mat4(1.0f);
 	glfwInit();
-	int height = 300, width = 400;
 
 	GLFWwindow* window = createWindow();
 	
 	if (window == NULL)
 		return EXIT;
 	
-	// glad: load all OpenGL function pointers
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
@@ -92,29 +91,23 @@ int main()
 
 	createCube(vertices, indices, normal);
 
-	shaderProgram = initShader("Shaders/vertex.glsl", "Shaders/frag.glsl");
+	shader shader("Shaders/vertex.glsl", "Shaders/frag.glsl");
 
 	while (!glfwWindowShouldClose(window))
 	{
-
-		height = getHeightFromViewport();
-		width = getWidthFromViewport();
-		perspectiveMatrix = perspective(radians(inputForWindow.getFieldOfView()), (float)width / (float)height, 0.1f, 300.f);
+		perspectiveMatrix = updatePerspectiveMatrix();
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		
 		mainCamera.updateCameraView();
-		loadProjectionModelViewUniforms(shaderProgram, perspectiveMatrix, modelMatrix, mainCamera.getCameraView());
-		render(shaderProgram, vao, vbo, vertices, normal, indices, perspectiveMatrix);
+		loadProjectionModelViewUniforms(shader.getShaderProgram(), perspectiveMatrix, modelMatrix, mainCamera.getCameraView());
+		render(shader.getShaderProgram(), vao, vbo, vertices, normal, indices, perspectiveMatrix);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	
 	}
-
-	// glfw: terminate, clearing all previously allocated GLFW resources	
-	glDeleteShader(vertexShaderID);
-	glDeleteShader(fragmentShaderID);
-	glDeleteShader(shaderProgram);
+	
 	glfwTerminate();
 
 	return 0;
@@ -170,8 +163,6 @@ void setupInputForWindow(GLFWwindow* window)
 	glfwSetCursorPosCallback(window, cursorPosCallback);
 	glfwSetMouseButtonCallback(window, mouseButtonCallback);
 	glfwSetScrollCallback(window, scrollCallback);
-
-
 }
 
 void setupOptionsOpenGL()
@@ -181,7 +172,7 @@ void setupOptionsOpenGL()
 
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-	glClearColor(0.3f, 0.4f, 0.5f, 0.f);		//Color to clear the screen with (R, G, B, Alpha)
+	glClearColor(0.3f, 0.4f, 0.5f, 0.f);
 }
 
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
@@ -190,31 +181,19 @@ bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
 
 	glGenBuffers(VertexBuffers::COUNT, vbo.id);
 
-	glBindVertexArray(vao);		//Set the active Vertex Array
+	glBindVertexArray(vao);		
 
-	glEnableVertexAttribArray(0);		//Tell opengl you're using layout attribute 0 (For shader input)
-	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::VERTICES]);		//Set the active Vertex Buffer
-	glVertexAttribPointer(
-		0,				//Attribute
-		3,				//Size # Components
-		GL_FLOAT,	//Type
-		GL_FALSE, 	//Normalized?
-		sizeof(vec3),	//Stride
-		(void*)0			//Offset
-	);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::VERTICES]);	
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
 
 	glEnableVertexAttribArray(1);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::NORMALS]);
-	glVertexAttribPointer(
-		1,				//Attribute
-		3,				//Size # Components
-		GL_FLOAT,	//Type
-		GL_FALSE, 	//Normalized?
-		sizeof(vec3),	//Stride
-		(void*)0			//Offset
-	);
+	glVertexAttribPointer( 1, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
+
 	glEnableVertexAttribArray(2);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo.id[VertexBuffers::INDICES]);
+
 	glBindVertexArray(0);
 	return !CheckGLErrors("initVAO");		//Check for errors in initialize
 }
@@ -315,81 +294,6 @@ void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<ve
 
 }
 
-
-GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc)
-{
-	vertexShader = GL_VERTEX_SHADER;
-	string vertexShaderSource = LoadSource(vertexShaderLoc);
-
-	vertexShaderID = CompileShader(vertexShader, vertexShaderSource);
-
-	fragmentShader = GL_FRAGMENT_SHADER;
-	string fragmentShaderSource = LoadSource(fragmentShaderLoc);
-
-	fragmentShaderID = CompileShader(fragmentShader, fragmentShaderSource);
-
-	GLuint shaderProgram = LinkProgram(vertexShaderID, fragmentShaderID);
-
-	return shaderProgram;
-}
-
-string LoadSource(const string &filename)
-{
-	string source;
-
-	ifstream input(filename.c_str());
-	if (input) {
-		copy(istreambuf_iterator<char>(input),
-			istreambuf_iterator<char>(),
-			back_inserter(source));
-		input.close();
-	}
-	else {
-		cout << "ERROR: Could not load shader source from file "
-			<< filename << endl;
-	}
-
-	return source;
-}
-
-GLuint CompileShader(GLenum shaderType, const string &source)
-{
-	// allocate shader object name
-	GLuint shaderObject = glCreateShader(shaderType);
-
-	// try compiling the source as a shader of the given type
-	const GLchar *source_ptr = source.c_str();
-	glShaderSource(shaderObject, 1, &source_ptr, 0);
-	glCompileShader(shaderObject);
-
-	// retrieve compile status
-	GLint status;
-	glGetShaderiv(shaderObject, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE)
-	{
-		GLint length;
-		glGetShaderiv(shaderObject, GL_INFO_LOG_LENGTH, &length);
-		string info(length, ' ');
-		glGetShaderInfoLog(shaderObject, info.length(), &length, &info[0]);
-		cout << "ERROR compiling shader:" << endl << endl;
-		cout << source << endl;
-		cout << info << endl;
-	}
-
-	return shaderObject;
-}
-
-GLuint LinkProgram(GLuint vertexID, GLuint fragmentID)
-{
-	GLuint shaderProgram = glCreateProgram();
-
-	glAttachShader(shaderProgram, vertexID);
-	glAttachShader(shaderProgram, fragmentID);
-	glLinkProgram(shaderProgram);
-
-	return shaderProgram;
-}
-
 int getHeightFromViewport()
 {
 	GLint* dimensions = getWindowDimensions();
@@ -410,6 +314,19 @@ GLint* getWindowDimensions()
 	GLint windowDimensions[4] = { 0 };
 	glGetIntegerv(GL_VIEWPORT, windowDimensions);
 	return windowDimensions;
+}
+
+mat4 updatePerspectiveMatrix()
+{
+	int height, width;
+	mat4 newPerspectiveMatrix;
+
+	height = getHeightFromViewport();
+	width = getWidthFromViewport();
+
+	newPerspectiveMatrix = perspective(radians(inputForWindow.getFieldOfView()), (float)width / (float)height, 0.1f, 300.f);
+
+	return newPerspectiveMatrix;
 }
 
 void loadProjectionModelViewUniforms(GLuint shaderProgram, mat4 projectionMatrix, mat4 modelMatrix, mat4 view)
