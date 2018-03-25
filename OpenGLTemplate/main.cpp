@@ -20,6 +20,7 @@ Johnny Simmonds
 #include <fstream>
 #include <vector>
 #include "camera.h"
+#include "inputCallBackForSpecificWindow.h"
 
 
 using namespace std;
@@ -28,19 +29,17 @@ using namespace glm;
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 GLuint vertexShader, fragmentShader, vertexShaderID, fragmentShaderID;
-bool clearColor = false;
 int EXIT = -1;
-/*Stores information of the vbo to be used for the vao*/
+camera mainCamera;
+inputCallBackForSpecificWindow inputForWindow;
+
+
 struct VertexBuffers {
 	enum { VERTICES = 0, NORMALS, INDICES, COUNT };
 
 	GLuint id[COUNT];
 };
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-void mouse_callback(GLFWwindow* window, double xPosition, double yPosition);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+
 string LoadSource(const string &filename);
 GLuint CompileShader(GLenum shaderType, const string &source);
 GLuint LinkProgram(GLuint vertexID, GLuint fragmentID);
@@ -56,13 +55,12 @@ bool setModelMatrixForShaders(GLuint shaderProgram, mat4 modelMatrix);
 bool setProjectionMatrixForShaders(GLuint shaderProgram, mat4 projectionMatrix);
 void printVec3(vec3 vecToPrint, string vecName);
 void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal);
-void clearColorCheck();
 GLFWwindow* createWindow();
-camera mainCamera;
-bool isFirstMousePosition = true;
-bool mouseButtonOnePressed = false;
-float lastX, lastY, yaw, pitch, fov = 90.0f;
-int globalWidth = 400, globalHeight = 300;
+void setupInputForWindow(GLFWwindow* window);
+int getWidthFromViewport();
+int getHeightFromViewport();
+GLint* getWindowDimensions();
+
 
 int main()
 {
@@ -71,9 +69,10 @@ int main()
 	GLuint vao;
 	VertexBuffers vbo;
 	GLuint shaderProgram;
-	mat4 perspectiveMatrix;// = perspective(radians(80.f), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
+	mat4 perspectiveMatrix;
 	mat4 modelMatrix = mat4(1.0f);
 	glfwInit();
+	int height = 300, width = 400;
 
 	GLFWwindow* window = createWindow();
 	
@@ -97,12 +96,12 @@ int main()
 
 	while (!glfwWindowShouldClose(window))
 	{
-		perspectiveMatrix = perspective(radians(fov), (float)globalWidth / (float)globalHeight, 0.1f, 300.f);
-		
-		clearColorCheck();
+
+		height = getHeightFromViewport();
+		width = getWidthFromViewport();
+		perspectiveMatrix = perspective(radians(inputForWindow.getFieldOfView()), (float)width / (float)height, 0.1f, 300.f);
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 		mainCamera.updateCameraView();
 		loadProjectionModelViewUniforms(shaderProgram, perspectiveMatrix, modelMatrix, mainCamera.getCameraView());
 		render(shaderProgram, vao, vbo, vertices, normal, indices, perspectiveMatrix);
@@ -120,7 +119,7 @@ int main()
 
 	return 0;
 }
-// ---------------------------------------------------------------------------------------------------------
+
 GLFWwindow* createWindow()
 {
 	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "OpenGL", NULL, NULL);
@@ -131,99 +130,50 @@ GLFWwindow* createWindow()
 		glfwTerminate();
 		return NULL;
 	}
-	glfwMakeContextCurrent(window);
-	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwSetKeyCallback(window, key_callback);
-	glfwSetCursorPosCallback(window, mouse_callback);
-	glfwSetMouseButtonCallback(window, mouse_button_callback);
-	glfwSetScrollCallback(window, scroll_callback);
+	setupInputForWindow(window);
+
 	return window;
 }
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+
+void setupInputForWindow(GLFWwindow* window)
 {
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
-	if (key == GLFW_KEY_W && (action == GLFW_REPEAT || action == GLFW_PRESS))
-		mainCamera.moveCameraPositionForward();
-	if (key == GLFW_KEY_S && (action == GLFW_REPEAT || action == GLFW_PRESS))
-		mainCamera.moveCameraPositionBackwards();
-	if (key == GLFW_KEY_A && (action == GLFW_REPEAT || action == GLFW_PRESS))
-		mainCamera.moveCameraPositionLeft();
-	if (key == GLFW_KEY_D && (action == GLFW_REPEAT || action == GLFW_PRESS))
-		mainCamera.moveCameraPositionRight();
-	if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
-		clearColor = false;
-	if (key == GLFW_KEY_SPACE && action == GLFW_RELEASE)
-		clearColor = true;
+	inputForWindow = inputCallBackForSpecificWindow(window, &mainCamera);
 
+	glfwMakeContextCurrent(window);
+	glfwSetWindowUserPointer(window, &inputForWindow);
 
-}
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
-{
-
-	if (button == GLFW_MOUSE_BUTTON_LEFT && (action == GLFW_PRESS || action == GLFW_REPEAT))
+	auto frameBufferCallback = [](GLFWwindow* w, int width, int height)
 	{
-		mouseButtonOnePressed = true;
-	}
-	else
-		mouseButtonOnePressed = false;
-}
-void mouse_callback(GLFWwindow* window, double xPosition, double yPosition)
-{
-	if (isFirstMousePosition)
+		static_cast<inputCallBackForSpecificWindow*>(glfwGetWindowUserPointer(w))->framebuffer_size_callback(w, width, height);
+	};
+
+	auto keyCallback = [](GLFWwindow* w, int key, int scancode, int action, int mods)
 	{
-		lastX = xPosition;
-		lastY = yPosition;
-		isFirstMousePosition = false;
-	}
-	if (mouseButtonOnePressed)
+		static_cast<inputCallBackForSpecificWindow*>(glfwGetWindowUserPointer(w))->key_callback(w, key, scancode, action, mods);
+	};
+	auto cursorPosCallback = [](GLFWwindow* w, double xPosition, double yPosition)
 	{
-		float xOffset = xPosition - lastX;
-		float yOffset = lastY - yPosition;
-		lastX = xPosition;
-		lastY = yPosition;
+		static_cast<inputCallBackForSpecificWindow*>(glfwGetWindowUserPointer(w))->mouse_callback(w, xPosition, yPosition);
+	};
 
-		float sensitivity = 0.5f;
-		xOffset *= sensitivity;
-		yOffset *= sensitivity;
+	auto mouseButtonCallback = [](GLFWwindow* w, int button, int action, int mods)
+	{
+		static_cast<inputCallBackForSpecificWindow*>(glfwGetWindowUserPointer(w))->mouse_button_callback(w, button, action, mods);
+	};
+	auto scrollCallback = [](GLFWwindow* w, double xoffset, double yoffset)
+	{
+		static_cast<inputCallBackForSpecificWindow*>(glfwGetWindowUserPointer(w))->scroll_callback(w, xoffset, yoffset);
+	};
 
-		yaw += xOffset;
-		pitch += yOffset;
+	glfwSetFramebufferSizeCallback(window, frameBufferCallback);
+	glfwSetKeyCallback(window, keyCallback);
+	glfwSetCursorPosCallback(window, cursorPosCallback);
+	glfwSetMouseButtonCallback(window, mouseButtonCallback);
+	glfwSetScrollCallback(window, scrollCallback);
 
-		if (pitch > 89.0f)
-			pitch = 89.0f;
-		if (pitch < -89.0f)
-			pitch = -89.0f;
 
-		vec3 target = vec3(0.0f, 0.0f, -3.0f);
-		target.x = cos(radians(yaw)) * cos(radians(pitch));
-		target.y = sin(radians(pitch));
-		target.z = sin(radians(yaw)) * cos(radians(pitch));
-
-		mainCamera.updateCameraTarget(normalize(target));
-
-	}
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-	if (fov >= 1.0f && fov <= 90.0f)
-		fov -= yoffset;
-	if (fov <= 1.0f)
-		fov = 1.0f;
-	if (fov >= 90.0f)
-		fov = 90.0f;
-}
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-	// make sure the viewport matches the new window dimensions; note that width and 
-	// height will be significantly larger than specified on retina displays.
-	glViewport(0, 0, width, height);
-	globalWidth = width;
-	globalHeight = height;
-}
-// ---------------------------------------------------------------------------------------------------------
 void setupOptionsOpenGL()
 {
 	glEnable(GL_DEPTH_TEST);
@@ -268,6 +218,7 @@ bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
 	glBindVertexArray(0);
 	return !CheckGLErrors("initVAO");		//Check for errors in initialize
 }
+
 void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
 {
 	vertices.push_back(vec3(0.5f, 0.5f, 0.0f));
@@ -282,6 +233,7 @@ void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vecto
 	normal.push_back(vec3(0.0f, 1.0f, 0.0f));
 	normal.push_back(vec3(0.0f, 0.0f, 1.0f));
 }
+
 void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
 {
 	/* points for generating the cube*/
@@ -363,7 +315,7 @@ void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<ve
 
 }
 
-// ---------------------------------------------------------------------------------------------------------
+
 GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc)
 {
 	vertexShader = GL_VERTEX_SHADER;
@@ -380,7 +332,7 @@ GLuint initShader(string vertexShaderLoc, string fragmentShaderLoc)
 
 	return shaderProgram;
 }
-/*Loads the contents of the GLSL shader files*/
+
 string LoadSource(const string &filename)
 {
 	string source;
@@ -400,7 +352,6 @@ string LoadSource(const string &filename)
 	return source;
 }
 
-// creates and returns a shader object compiled from the given source
 GLuint CompileShader(GLenum shaderType, const string &source)
 {
 	// allocate shader object name
@@ -427,6 +378,7 @@ GLuint CompileShader(GLenum shaderType, const string &source)
 
 	return shaderObject;
 }
+
 GLuint LinkProgram(GLuint vertexID, GLuint fragmentID)
 {
 	GLuint shaderProgram = glCreateProgram();
@@ -437,16 +389,29 @@ GLuint LinkProgram(GLuint vertexID, GLuint fragmentID)
 
 	return shaderProgram;
 }
-// ---------------------------------------------------------------------------------------------------------
-void clearColorCheck()
+
+int getHeightFromViewport()
 {
-	if (clearColor == true)
-	{
-		glClearColor(0.3f, 0.4f, 0.5f, 0.f);
-	}
+	GLint* dimensions = getWindowDimensions();
+	GLint currWindowHeight = dimensions[3];
+	return (int)currWindowHeight;
+
 }
 
-// ---------------------------------------------------------------------------------------------------------
+int getWidthFromViewport()
+{
+	GLint* dimensions = getWindowDimensions();
+	GLint currWindowWidth = dimensions[2];
+	return (int)currWindowWidth;
+}
+
+GLint* getWindowDimensions()
+{
+	GLint windowDimensions[4] = { 0 };
+	glGetIntegerv(GL_VIEWPORT, windowDimensions);
+	return windowDimensions;
+}
+
 void loadProjectionModelViewUniforms(GLuint shaderProgram, mat4 projectionMatrix, mat4 modelMatrix, mat4 view)
 {
 	setViewMatrixForShaders(shaderProgram, view);
@@ -482,7 +447,7 @@ bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 	glUseProgram(0);
 	return !CheckGLErrors("setViewMatrixForShaders");
 }
-// ---------------------------------------------------------------------------------------------------------
+
 bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix)
 {
 	glUseProgram(shaderProgram);
@@ -494,7 +459,6 @@ bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> ve
 	return !CheckGLErrors("Render");
 }
 
-/*Loads the buffer with the vbo buffer with the required data*/
 bool loadBuffer(const VertexBuffers& vbo,
 	const vector<vec3>& points,
 	const vector<vec3> normals,
@@ -529,8 +493,7 @@ bool loadBuffer(const VertexBuffers& vbo,
 
 	return !CheckGLErrors("loadBuffer");
 }
-// ---------------------------------------------------------------------------------------------------------
-/*Checks for any opengl errors*/
+
 bool CheckGLErrors(string location)
 {
 	bool error = false;
