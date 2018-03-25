@@ -15,6 +15,7 @@ inputCallBackForSpecificWindow::inputCallBackForSpecificWindow(GLFWwindow* windo
 inputCallBackForSpecificWindow::~inputCallBackForSpecificWindow()
 {
 }
+
 void inputCallBackForSpecificWindow::key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
@@ -29,6 +30,7 @@ void inputCallBackForSpecificWindow::key_callback(GLFWwindow* window, int key, i
 		cameraForThisWindowInput->moveCameraPositionRight();
 
 }
+
 void inputCallBackForSpecificWindow::mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
 
@@ -39,15 +41,17 @@ void inputCallBackForSpecificWindow::mouse_button_callback(GLFWwindow* window, i
 	else
 		mouseButtonOnePressed = false;
 }
+
 void inputCallBackForSpecificWindow::mouse_callback(GLFWwindow* window, double xPosition, double yPosition)
 {
-	if (isFirstMousePosition)
+
+	if (!mouseButtonOnePressed)
 	{
 		lastX = xPosition;
 		lastY = yPosition;
-		isFirstMousePosition = false;
 	}
-	if (mouseButtonOnePressed)
+
+	else if (mouseButtonOnePressed)
 	{
 		float xOffset = xPosition - lastX;
 		float yOffset = lastY - yPosition;

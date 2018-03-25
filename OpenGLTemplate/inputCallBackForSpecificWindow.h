@@ -18,7 +18,6 @@ public:
 private:
 	GLFWwindow* window;
 	camera* cameraForThisWindowInput;
-	bool isFirstMousePosition = true;
 	bool mouseButtonOnePressed = false;
 	float lastX, lastY, yaw, pitch, fov = 90.0f;
 };
