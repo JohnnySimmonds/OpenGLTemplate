@@ -2,7 +2,17 @@
 
 
 
-triangle::triangle(float newScale)
+triangle::triangle()
+{
+
+}
+
+
+triangle::~triangle()
+{
+}
+
+void triangle::create(float newScale)
 {
 	scale = newScale;
 	vertices.push_back(scale*vec3(0.5f, 0.5f, 0.0f));
@@ -16,11 +26,6 @@ triangle::triangle(float newScale)
 	normal.push_back(vec3(1.0f, 0.0f, 0.0f));
 	normal.push_back(vec3(0.0f, 1.0f, 0.0f));
 	normal.push_back(vec3(0.0f, 0.0f, 1.0f));
-}
-
-
-triangle::~triangle()
-{
 }
 
 vector<vec3> triangle::getVertices()

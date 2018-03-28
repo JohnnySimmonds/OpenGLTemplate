@@ -2,7 +2,16 @@
 
 
 
-cube::cube(float newScale)
+cube::cube()
+{
+
+}
+
+cube::~cube()
+{
+
+}
+void cube::create(float newScale)
 {
 	scale = newScale;
 	/* points for generating the cube*/
@@ -81,11 +90,6 @@ cube::cube(float newScale)
 	normal.push_back(vec3(0.7f, 0.0f, 0.f));
 	normal.push_back(vec3(0.5f, 0.0f, 0.f));
 	normal.push_back(vec3(0.3f, 0.0f, 0.f));
-}
-
-cube::~cube()
-{
-
 }
 
 vector<vec3> cube::getVertices()

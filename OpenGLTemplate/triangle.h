@@ -4,11 +4,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 using namespace std;
 using namespace glm;
-class triangle
+#include "shape.h"
+class triangle : public shape
 {
 public:
-	triangle(float newScale);
+	triangle();
 	~triangle();
+	void create(float newScale);
 	vector<vec3> getVertices();
 	vector<vec3> getNormals();
 	vector<unsigned int> getIndices();
