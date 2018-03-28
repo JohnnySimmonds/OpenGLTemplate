@@ -22,6 +22,7 @@ Johnny Simmonds
 #include "camera.h"
 #include "inputCallBackForSpecificWindow.h"
 #include "shader.h"
+#include "errorCheckingGL.h"
 
 
 using namespace std;
@@ -30,13 +31,13 @@ using namespace glm;
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-GLuint vertexShader, fragmentShader, vertexShaderID, fragmentShaderID;
-
 int EXIT = -1;
 
 camera mainCamera;
 
 inputCallBackForSpecificWindow inputForWindow;
+
+errorCheckingGL error;
 
 
 struct VertexBuffers {
@@ -47,7 +48,6 @@ struct VertexBuffers {
 
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
 bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
-bool CheckGLErrors(string location);
 bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix);
 void setupOptionsOpenGL();
 void loadProjectionModelViewUniforms(GLuint shaderProgram, mat4 projectionMatrix, mat4 modelMatrix, mat4 view);
@@ -195,7 +195,7 @@ bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo.id[VertexBuffers::INDICES]);
 
 	glBindVertexArray(0);
-	return !CheckGLErrors("initVAO");		//Check for errors in initialize
+	return error.openGlErrorCheck("initVAO");		//Check for errors in initialize
 }
 
 void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
@@ -342,7 +342,7 @@ bool setProjectionMatrixForShaders(GLuint shaderProgram, mat4 projectionMatrix)
 	glUniformMatrix4fv(modelLocationForShader, 1, false, &projectionMatrix[0][0]);
 
 	glUseProgram(0);
-	return !CheckGLErrors("setProjectionMatrixForShaders");
+	return error.openGlErrorCheck("setProjectionMatrixForShaders");
 
 }
 bool setModelMatrixForShaders(GLuint shaderProgram, mat4 modelMatrix)
@@ -352,7 +352,7 @@ bool setModelMatrixForShaders(GLuint shaderProgram, mat4 modelMatrix)
 	glUniformMatrix4fv(modelLocationForShader, 1, false, &modelMatrix[0][0]);
 
 	glUseProgram(0);
-	return !CheckGLErrors("setModelMatrixForShaders");
+	return error.openGlErrorCheck("setModelMatrixForShaders");
 
 }
 bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
@@ -362,7 +362,7 @@ bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 	glUniformMatrix4fv(cameraLocation, 1, false, &view[0][0]);
 
 	glUseProgram(0);
-	return !CheckGLErrors("setViewMatrixForShaders");
+	return error.openGlErrorCheck("setViewMatrixForShaders");
 }
 
 bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix)
@@ -373,7 +373,7 @@ bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> ve
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
 	glUseProgram(0);
 	glBindVertexArray(0);
-	return !CheckGLErrors("Render");
+	return error.openGlErrorCheck("Render");
 }
 
 bool loadBuffer(const VertexBuffers& vbo,
@@ -408,33 +408,9 @@ bool loadBuffer(const VertexBuffers& vbo,
 		GL_STATIC_DRAW
 	);
 
-	return !CheckGLErrors("loadBuffer");
+	return error.openGlErrorCheck("loadBuffer");
 }
 
-bool CheckGLErrors(string location)
-{
-	bool error = false;
-	for (GLenum flag = glGetError(); flag != GL_NO_ERROR; flag = glGetError())
-	{
-		cout << "OpenGL ERROR:  ";
-		switch (flag) {
-		case GL_INVALID_ENUM:
-			cout << location << ": " << "GL_INVALID_ENUM" << endl; break;
-		case GL_INVALID_VALUE:
-			cout << location << ": " << "GL_INVALID_VALUE" << endl; break;
-		case GL_INVALID_OPERATION:
-			cout << location << ": " << "GL_INVALID_OPERATION" << endl; break;
-		case GL_INVALID_FRAMEBUFFER_OPERATION:
-			cout << location << ": " << "GL_INVALID_FRAMEBUFFER_OPERATION" << endl; break;
-		case GL_OUT_OF_MEMORY:
-			cout << location << ": " << "GL_OUT_OF_MEMORY" << endl; break;
-		default:
-			cout << "[unknown error code]" << endl;
-		}
-		error = true;
-	}
-	return error;
-}
 void printVec3(vec3 vecToPrint, string vecName)
 {
 	cout << vecName << ": " << "X: " << vecToPrint.x << "Y: " << vecToPrint.y << "Z: " << vecToPrint.z << endl;

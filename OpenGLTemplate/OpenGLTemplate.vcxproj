@@ -145,12 +145,14 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\..\Desktop\glad\src\glad.c" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="errorCheckingGL.cpp" />
     <ClCompile Include="inputCallBackForSpecificWindow.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="shader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="camera.h" />
+    <ClInclude Include="errorCheckingGL.h" />
     <ClInclude Include="inputCallBackForSpecificWindow.h" />
     <ClInclude Include="shader.h" />
   </ItemGroup>
