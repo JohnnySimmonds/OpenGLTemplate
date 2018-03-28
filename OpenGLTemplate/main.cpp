@@ -23,6 +23,8 @@ Johnny Simmonds
 #include "inputCallBackForSpecificWindow.h"
 #include "shader.h"
 #include "errorCheckingGL.h"
+#include "cube.h"
+#include "triangle.h"
 
 
 using namespace std;
@@ -47,15 +49,14 @@ struct VertexBuffers {
 };
 
 bool initVaoVbo(GLuint& vao, VertexBuffers& vbo);
-bool loadBuffer(const VertexBuffers& vbo, const vector<vec3>& points, const vector<vec3> normals, const vector<unsigned int>& indices);
-bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix);
+bool loadBuffer(const VertexBuffers& vbo, cube newCube);
+bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, cube newCube, mat4 perspectiveMatrix);
 void setupOptionsOpenGL();
 void loadProjectionModelViewUniforms(GLuint shaderProgram, mat4 projectionMatrix, mat4 modelMatrix, mat4 view);
 bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view);
 bool setModelMatrixForShaders(GLuint shaderProgram, mat4 modelMatrix);
 bool setProjectionMatrixForShaders(GLuint shaderProgram, mat4 projectionMatrix);
 void printVec3(vec3 vecToPrint, string vecName);
-void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal);
 GLFWwindow* createWindow();
 void setupInputForWindow(GLFWwindow* window);
 int getWidthFromViewport();
@@ -73,7 +74,8 @@ int main()
 	mat4 perspectiveMatrix;
 	mat4 modelMatrix = mat4(1.0f);
 	glfwInit();
-
+	cube newCube = cube(1.0f);
+	triangle newTriangle = triangle(1.0f);
 	GLFWwindow* window = createWindow();
 	
 	if (window == NULL)
@@ -89,8 +91,6 @@ int main()
 
 	initVaoVbo(vao, vbo);
 
-	createCube(vertices, indices, normal);
-
 	shader shader("Shaders/vertex.glsl", "Shaders/frag.glsl");
 
 	while (!glfwWindowShouldClose(window))
@@ -101,7 +101,7 @@ int main()
 		
 		mainCamera.updateCameraView();
 		loadProjectionModelViewUniforms(shader.getShaderProgram(), perspectiveMatrix, modelMatrix, mainCamera.getCameraView());
-		render(shader.getShaderProgram(), vao, vbo, vertices, normal, indices, perspectiveMatrix);
+		render(shader.getShaderProgram(), vao, vbo, newCube, perspectiveMatrix);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -198,102 +198,6 @@ bool initVaoVbo(GLuint& vao, VertexBuffers& vbo)
 	return error.openGlErrorCheck("initVAO");		//Check for errors in initialize
 }
 
-void createTriangle(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
-{
-	vertices.push_back(vec3(0.5f, 0.5f, 0.0f));
-	vertices.push_back(vec3(0.5f, -0.5f, 0.0f));
-	vertices.push_back(vec3(-0.5f, 0.5f, 0.0f));
-
-	indices.push_back(0);
-	indices.push_back(1);
-	indices.push_back(2);
-
-	normal.push_back(vec3(1.0f, 0.0f, 0.0f));
-	normal.push_back(vec3(0.0f, 1.0f, 0.0f));
-	normal.push_back(vec3(0.0f, 0.0f, 1.0f));
-}
-
-void createCube(vector<vec3>& vertices, vector<unsigned int>& indices, vector<vec3>& normal)
-{
-	/* points for generating the cube*/
-	vertices.push_back(vec3(1.0f, 1.0f, 1.f)); //0
-	vertices.push_back(vec3(1.0f, -1.0f, 1.f)); //1
-	vertices.push_back(vec3(-1.0f, -1.0f, 1.f)); //2
-	vertices.push_back(vec3(-1.0f, 1.0f, 1.f)); //3
-	vertices.push_back(vec3(-1.0f, -1.0f, -1.f)); //4
-	vertices.push_back(vec3(-1.0f, 1.0f, -1.f)); //5
-	vertices.push_back(vec3(1.0f, 1.0f, -1.f)); //6
-	vertices.push_back(vec3(1.0f, -1.0f, -1.f)); //7
-
-
-	/* front of cube*/
-	indices.push_back(0);
-	indices.push_back(1);
-	indices.push_back(2);
-
-	indices.push_back(0);
-	indices.push_back(2);
-	indices.push_back(3);
-
-	/* left side of cube*/
-	indices.push_back(2);
-	indices.push_back(3);
-	indices.push_back(4);
-
-	indices.push_back(3);
-	indices.push_back(4);
-	indices.push_back(5);
-
-	/* back of cube*/
-	indices.push_back(6);
-	indices.push_back(7);
-	indices.push_back(4);
-
-	indices.push_back(4);
-	indices.push_back(5);
-	indices.push_back(6);
-
-	/* right side of cube*/
-	indices.push_back(0);
-	indices.push_back(1);
-	indices.push_back(7);
-
-	indices.push_back(0);
-	indices.push_back(7);
-	indices.push_back(6);
-
-	/* top of cube*/
-	indices.push_back(0);
-	indices.push_back(3);
-	indices.push_back(5);
-
-	indices.push_back(0);
-	indices.push_back(5);
-	indices.push_back(6);
-
-	/* bottom of cube*/
-	indices.push_back(1);
-	indices.push_back(2);
-	indices.push_back(4);
-
-	indices.push_back(1);
-	indices.push_back(4);
-	indices.push_back(7);
-
-	/*colors of each point*/
-
-	normal.push_back(vec3(0.9f, 0.0f, 0.f));
-	normal.push_back(vec3(0.7f, 0.0f, 0.f));
-	normal.push_back(vec3(0.5f, 0.0f, 0.f));
-	normal.push_back(vec3(0.3f, 0.0f, 0.f));
-
-	normal.push_back(vec3(0.9f, 0.0f, 0.f));
-	normal.push_back(vec3(0.7f, 0.0f, 0.f));
-	normal.push_back(vec3(0.5f, 0.0f, 0.f));
-	normal.push_back(vec3(0.3f, 0.0f, 0.f));
-
-}
-
 int getHeightFromViewport()
 {
 	GLint* dimensions = getWindowDimensions();
@@ -365,28 +269,26 @@ bool setViewMatrixForShaders(GLuint shaderProgram, mat4 view)
 	return error.openGlErrorCheck("setViewMatrixForShaders");
 }
 
-bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, vector<vec3> vertices, vector<vec3> normal, vector<unsigned int> indices, mat4 perspectiveMatrix)
+bool render(GLuint shaderProgram, GLuint vao, VertexBuffers vbo, cube newCube, mat4 perspectiveMatrix)
 {
 	glUseProgram(shaderProgram);
 	glBindVertexArray(vao);
-	loadBuffer(vbo, vertices, normal, indices);
-	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, (void*)0);
+	loadBuffer(vbo, newCube);
+	glDrawElements(GL_TRIANGLES, newCube.getIndices().size(), GL_UNSIGNED_INT, (void*)0);
 	glUseProgram(0);
 	glBindVertexArray(0);
 	return error.openGlErrorCheck("Render");
 }
 
-bool loadBuffer(const VertexBuffers& vbo,
-	const vector<vec3>& points,
-	const vector<vec3> normals,
-	const vector<unsigned int>& indices)
+
+bool loadBuffer(const VertexBuffers& vbo, cube newCube)
 {
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::VERTICES]);
 	glBufferData(
 		GL_ARRAY_BUFFER,				//Which buffer you're loading too
-		sizeof(vec3)*points.size(),		//Size of data in array (in bytes)
-		&points[0],						//Start of array (&points[0] will give you pointer to start of vector)
+		sizeof(vec3)*newCube.getVertices().size(),		//Size of data in array (in bytes)
+		&newCube.getVertices()[0],						//Start of array (&points[0] will give you pointer to start of vector)
 		GL_STATIC_DRAW					//GL_DYNAMIC_DRAW if you're changing the data often
 										//GL_STATIC_DRAW if you're changing seldomly
 	);
@@ -394,8 +296,8 @@ bool loadBuffer(const VertexBuffers& vbo,
 	glBindBuffer(GL_ARRAY_BUFFER, vbo.id[VertexBuffers::NORMALS]);
 	glBufferData(
 		GL_ARRAY_BUFFER,				//Which buffer you're loading too
-		sizeof(vec3)*normals.size(),	//Size of data in array (in bytes)
-		&normals[0],					//Start of array (&points[0] will give you pointer to start of vector)
+		sizeof(vec3)*newCube.getNormals().size(),	//Size of data in array (in bytes)
+		&newCube.getNormals()[0],					//Start of array (&points[0] will give you pointer to start of vector)
 		GL_STATIC_DRAW					//GL_DYNAMIC_DRAW if you're changing the data often
 										//GL_STATIC_DRAW if you're changing seldomly
 	);
@@ -403,8 +305,8 @@ bool loadBuffer(const VertexBuffers& vbo,
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo.id[VertexBuffers::INDICES]);
 	glBufferData(
 		GL_ELEMENT_ARRAY_BUFFER,
-		sizeof(unsigned int)*indices.size(),
-		&indices[0],
+		sizeof(unsigned int)*newCube.getIndices().size(),
+		&newCube.getIndices()[0],
 		GL_STATIC_DRAW
 	);
 

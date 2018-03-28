@@ -145,16 +145,20 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\..\Desktop\glad\src\glad.c" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="cube.cpp" />
     <ClCompile Include="errorCheckingGL.cpp" />
     <ClCompile Include="inputCallBackForSpecificWindow.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="triangle.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="camera.h" />
+    <ClInclude Include="cube.h" />
     <ClInclude Include="errorCheckingGL.h" />
     <ClInclude Include="inputCallBackForSpecificWindow.h" />
     <ClInclude Include="shader.h" />
+    <ClInclude Include="triangle.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
